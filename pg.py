@@ -42,49 +42,6 @@ def check_booking_time(time):
 
 
 
-def services_filter(services_list, lang:str = 'ro'):
-    new_list = []
-    for i in services_list:
-        s_id = i.get('id')
-        order_num = i.get('order_num')
-        service_link = i.get('service_link')
-        service_name = i.get('service_name_'+lang)
-        avatar_link = i.get('avatar_link')
-        
-        if i.get('service_li_'+lang):
-            service_li = [x for x in i.get('service_li_'+lang).split(',')]
-        else:
-            service_li = None
-        time_need = i.get('time_need')
-        service_description = i.get('service_description_'+lang)
-
-        #Блок по фильрации списка опций
-        service_types = list()
-        for key, val in i.items():
-            filter_keys = []
-            if 'type_' in str(key) and lang in str(key) and val is not None:
-                type_num = key.split('_')[1]
-                type_val = val
-                # service_types.append({
-                #     f'type_{type_num}_name':type_val,
-                #     f'type_{type_num}_price':i.get(f'type_{type_num}_price')
-                #     })
-                service_types.append((type_val, float(i.get(f'type_{type_num}_price')),))
-        
-        new_list.append(
-            {
-                'service_id':s_id,
-                'order_num':order_num,
-                'service_link':service_link,
-                'service_name':service_name,
-                'avatar_link':avatar_link,
-                'service_li':service_li,
-                'time_need':time_need,
-                'service_description':service_description,
-                'service_types':service_types
-            })
-    return new_list
-
 
 class PgConnect:
     def __init__(self, minconn=1, maxconn=10, **kwargs):
@@ -147,119 +104,12 @@ class PgRequest:
 
 
 
-class Services:
+class BotDB:
     def __init__(self, request: PgRequest):
         self.__request = request
 
-    
-    def get_services(self, lang: str = 'ro'):
-        services = self.__request.selectd('SELECT * FROM services ORDER BY order_num;')
-        return services_filter(services_list=services, lang=lang)
-    
-
-    def get_service(self, service_link: str, lang: str = 'ro') :
-        service = self.__request.selectd('SELECT * FROM services WHERE service_link=%s;', (service_link,))
-        return services_filter(services_list=service, lang=lang)
-    
-    
-    def start_clients(self, phone:str, service_link:str, booking_date, 
-                                service_name, sid, lang: str = 'ro'):
-        
-        booking_date = check_booking_date(booking_date)
-        
-        posted_date = datetime_now()        
-        check_number = self.__request.select('SELECT client_phone FROM start_clients WHERE client_phone = %s', (phone,))
-        
-        if len(check_number) == 0:
-            self.__request.insert('''INSERT INTO start_clients(client_phone, service_link, service_name, booking_date, order_posted, session_id )
-                                                VALUES(%s,%s,%s,%s,%s,%s)''',
-                                                (phone, service_link, service_name, booking_date, posted_date, sid,))
-        
-
-    def check_time(self, booking_date, time_need, lang: str = 'ro'):
-        select_orders = self.__request('SELECT * FROM booking WHERE booking_date = %s', (booking_date,))
-
-
-
-
-
-
-    def service_booking(self, sid, ip_address, booking_date, booking_time, client_phone, service_name, service_link,
-                        service_price, car_type,  lang: str = 'ro'):
-        
-        posted_date = datetime_now()
-        booking_date = check_booking_date(booking_date)
-        
-        booking_time = check_booking_time(booking_time)
-
-        try:
-            self.__request.insert('''INSERT INTO booking(session_id, ip_address, booking_date,
-                                booking_time, client_phone, service_name, service_link,
-                                service_price, car_type, order_posted, order_status, client_lang) 
-                                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
-                                    (sid, ip_address, booking_date, booking_time,client_phone, service_name,
-                                    service_link, service_price, car_type, posted_date, 'posted', lang,))
-            return True
-        
-        except Exception as ex:
-            error_log(ex=ex)
-            return False
-        
-
-
-    def check_new_orders(self):
-        return self.__request.selectd('SELECT * FROM booking WHERE order_status = %s',('posted',))
-
-    def set_booking_status(self, booking_id, booking_status):
-        try:
-            self.__request.insert('UPDATE booking SET order_status = %s WHERE id = %s', (booking_status, booking_id,))
-            return True
-        
-        except Exception as ex:
-            error_log(ex=ex)
-            return False
-
-
-
-class Static:
-    def __init__(self, request: PgRequest):
-        self.__request = request
-
-    def select_slider(self, lang: str = 'ro'):
-        items =  self.__request.selectd('SELECT * FROM slider ORDER BY order_by;')
-        new_list = []
-
-        for i in items:
-            new_list.append({
-                'id':i.get('id'),
-                'photo_link':i.get('photo_link'),
-                'photo_name':i.get('photo_name'),
-                'order_by':i.get('order_by'),
-                'title':i.get(f'title_{lang}'),
-                'desc':i.get(f'desc_{lang}'),
-                'color':i.get(f'color')
-            })
-
-        return new_list
-
-
-
-class Users:
-    def __init__(self, request: PgRequest):
-        self.__request = request
-
-    def get_user(self, user_id: str ):
-        result = self.__request.selectd('SELECT * FROM users WHERE id = %s', (user_id,))[0]
-        return result
-
-    def user_for_login(self, login: str ):
-        try:
-            result = self.__request.selectd('SELECT * FROM users WHERE login = %s', (login,))[0]
-            return result
-        
-        except Exception as ex:
-            error_log(ex=ex)
-            return False
+    def select_services(self):
+        return self.__request.selectd('SELECT * FROM services;')
     
 
 
@@ -268,7 +118,6 @@ class Users:
 connect = PgConnect(host=DB.host, port=DB.port, database=DB.database, user=DB.user, password=DB.password)
 request_db = PgRequest(connect)
 
-services = Services(request_db)
-static = Static(request_db)
-users = Users(request_db)
+db_bot = BotDB(request_db)
+
 
