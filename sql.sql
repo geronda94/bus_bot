@@ -47,9 +47,3 @@ INSERT INTO services(service_name, service_desc, service_price, start_city, fini
 ;
 
 
-
-
-655
-    -- j.7
-
-     -- 

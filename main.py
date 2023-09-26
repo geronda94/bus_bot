@@ -1,5 +1,5 @@
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, ContentType
+from aiogram.types import Message, ContentType, Contact
 from aiogram.filters import Filter, Command
 import asyncio
 from environs import Env
@@ -10,6 +10,8 @@ from aiogram.utils.keyboard import ReplyKeyboardBuilder
 from pg import db_bot
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
+from function import number_validator
+
 
 
 #Блок инициализации#############################
@@ -40,10 +42,9 @@ async def set_commands(bot: Bot):
 class StepsForm(StatesGroup):
     GET_DIRECTION = State()
     GET_DATE = State()
-    GET_NAME = State()
-    GET_PERSONS = State()
     GET_CONTACT = State()
-
+    GET_PERSONS = State()
+    CONFIRM_BOOKING = State()
 
 
 #Формируем кнопки через билдер from aiogram.utils.keyboard import ReplyKeyboardBuilder
@@ -84,12 +85,59 @@ async def get_date(message: Message, state: FSMContext):
 
 
     await state.update_data(direction=message.text)  
-    await state.set_state(StepsForm.GET_NAME)
+    await state.set_state(StepsForm.GET_CONTACT)
+
+
+async def get_contact(message: Message, state: FSMContext):
+
+    keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
+    keyboard_builder.button(text='Показать номер телефона', request_contact=True)
+    await message.answer('Ваши данные для связи: ', reply_markup=keyboard_builder.as_markup(resize_keyboard=True, #Указываем настройки клавиатуры
+                               one_time_leyboard=True,
+                               input_field_placeholder=''                               
+                               ))
+    context_data = await state.get_data()
+    if not context_data.get('date'):
+        await state.update_data(date=message.text)
+
+    await state.set_state(StepsForm.GET_PERSONS)
 
 
 
+async def get_persons(message: Message, state:FSMContext):    
+    await state.update_data(contact=message.contact)
+    context_data = await state.get_data()
+    contact = context_data.get('contact')
 
+    if isinstance(contact, Contact):
+        phone = contact.phone_number
+        await message.answer('Количество пассажиров: ', reply_markup=ReplyKeyboardRemove()                           
+                               )
+        await state.set_state(StepsForm.CONFIRM_BOOKING)
+    else:
+        phone = str(contact)
+        if number_validator(phone):
+            await message.answer('Количество пассажиров: ', reply_markup=ReplyKeyboardRemove()                           
+                               )
+            await state.set_state(StepsForm.CONFIRM_BOOKING)
+        else:
+            # await message.answer(f'Неверный номер {phone}, повторите еще раз')
+            await state.set_state(StepsForm.GET_CONTACT)
+            return await get_contact()
+    
+    
 
+async def confirm_booking(message: Message, state: FSMContext):
+
+    await state.update_data(persons=message.text)
+    context_data = await state.get_data()
+
+    date = context_data.get('date')
+    contact = context_data.get('contact')
+    persons = context_data.get('persons')
+
+    await message.answer(f'{date}, {persons}, {contact}')
+    await state.clear()
 
 ################################################
 #Блок стартовых функций#########################
@@ -133,6 +181,9 @@ async def start():
 
     dp.message.register(get_booking, StepsForm.GET_DIRECTION)         #После введении имени переходим в функцию которая
     dp.message.register(get_date, StepsForm.GET_DATE)         #После введении имени переходим в функцию которая
+    dp.message.register(get_contact, StepsForm.GET_CONTACT)         #После введении имени переходим в функцию которая
+    dp.message.register(get_persons, StepsForm.GET_PERSONS)         #После введении имени переходим в функцию которая
+    dp.message.register(confirm_booking, StepsForm.CONFIRM_BOOKING)         #После введении имени переходим в функцию которая
 
 
 
