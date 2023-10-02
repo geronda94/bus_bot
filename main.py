@@ -1,16 +1,17 @@
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, ContentType, Contact
 from aiogram.filters import Filter, Command
 import asyncio
 from environs import Env
 import logging #импортируем библиотеку логирования
 from aiogram.types import BotCommand, BotCommandScopeDefault #Узнать про скопы
+from aiogram.types import Message, ContentType, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, CallbackQuery, Contact
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton,KeyboardButtonPollType, ReplyKeyboardRemove
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
+from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardButton, ReplyKeyboardBuilder
+from aiogram.filters.callback_data import CallbackData
 from pg import db_bot
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
-from function import number_validator
+from function import number_validator, get_days
 
 
 
@@ -37,6 +38,9 @@ async def set_commands(bot: Bot):
     await bot.set_my_commands(commands, BotCommandScopeDefault()) #Скоп по умолчанию|ПОказывает команды всем
 
 
+#Формруем кнопки календаря
+
+
 
 #Машина состояний
 class StepsForm(StatesGroup):
@@ -47,9 +51,14 @@ class StepsForm(StatesGroup):
     CONFIRM_BOOKING = State()
 
 
+
+#Collback data
+class GetDays(CallbackData, prefix='day'):
+    index: int
+    title: str
+    data: str
+
 #Формируем кнопки через билдер from aiogram.utils.keyboard import ReplyKeyboardBuilder
-
-
 async def booking_button(state: FSMContext):
     keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
     keyboard_builder.button(text='Забронировать билет') #далее создаем кнопки
@@ -80,18 +89,73 @@ async def get_booking(message: Message, state: FSMContext):
 
 
 
-async def get_date(message: Message, state: FSMContext):
-    await message.answer(f'Выберите дату поездки \n<b>{message.text}</b>', reply_markup=ReplyKeyboardRemove())
 
+# async def get_date(message: Message, state: FSMContext):
+
+#     await message.answer(f'Рейс: <b>{message.text}</b>', reply_markup=ReplyKeyboardRemove())
+
+#     calendar_list = []
+#     for month_name, date_list in get_days().items():
+#         calendar_list.append([InlineKeyboardButton(text=f'{month_name}', callback_data=f'month_{month_name}')])
+        
+
+#         date_list_buttons = []
+#         count_days = 0
+#         for day in date_list:
+#             day_split = str(day.split('/')[-1])
+#             date_list_buttons.append(InlineKeyboardButton(text=f'{day_split}', callback_data=f'day_{day}'))
+#             count_days +=1
+#             if count_days ==5:
+#                 calendar_list.append(date_list_buttons)
+#                 count_days = 0
+#                 date_list_buttons = []
+
+        
+
+#     await message.answer("Выберите дату отправления", reply_markup=InlineKeyboardMarkup(inline_keyboard=calendar_list))
+
+#     await state.update_data(direction=message.text)  
+#     await state.set_state(StepsForm.GET_CONTACT)
+
+
+
+async def get_date(message: Message, state: FSMContext):
+
+    await message.answer(f'Рейс: <b>{message.text}</b>', reply_markup=ReplyKeyboardRemove())
+
+    calendar_list = []
+    for month_name, date_list in get_days().items():
+        calendar_list.append([KeyboardButton(text=f'{month_name}')])
+        
+
+        date_list_buttons = []
+        count_days = 0
+        for day in date_list:
+            day_split = str(day.split('/')[-1])
+            date_list_buttons.append(KeyboardButton(text=f'{day}'))
+            count_days +=1
+            if count_days ==5:
+                calendar_list.append(date_list_buttons)
+                count_days = 0
+                date_list_buttons = []
+
+        
+
+    await message.answer("Выберите дату отправления", reply_markup=ReplyKeyboardMarkup(keyboard=calendar_list))
 
     await state.update_data(direction=message.text)  
     await state.set_state(StepsForm.GET_CONTACT)
 
 
-async def get_contact(message: Message, state: FSMContext):
+
+
+
+
+async def get_contact(message: Message, bot: Bot, state: FSMContext):
+
 
     keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
-    keyboard_builder.button(text='Показать номер телефона', request_contact=True)
+    keyboard_builder.button(text='Отправить текущий номер из Telegram', request_contact=True)
     await message.answer('Ваши данные для связи: ', reply_markup=keyboard_builder.as_markup(resize_keyboard=True, #Указываем настройки клавиатуры
                                one_time_leyboard=True,
                                input_field_placeholder=''                               
@@ -104,26 +168,33 @@ async def get_contact(message: Message, state: FSMContext):
 
 
 
-async def get_persons(message: Message, state:FSMContext):    
-    await state.update_data(contact=message.contact)
-    context_data = await state.get_data()
-    contact = context_data.get('contact')
+async def get_persons(message: Message, state:FSMContext):
 
-    if isinstance(contact, Contact):
-        phone = contact.phone_number
-        await message.answer('Количество пассажиров: ', reply_markup=ReplyKeyboardRemove()                           
-                               )
+    if message.contact:
+        phone = message.contact.phone_number
+        await message.answer('Количество пассажиров: ', reply_markup=ReplyKeyboardRemove())
+        await state.update_data(contact=message.contact.phone_number)
         await state.set_state(StepsForm.CONFIRM_BOOKING)
     else:
-        phone = str(contact)
+        phone = number_validator(message.text)
         if number_validator(phone):
-            await message.answer('Количество пассажиров: ', reply_markup=ReplyKeyboardRemove()                           
-                               )
+            await message.answer('Количество пассажиров: ', reply_markup=ReplyKeyboardRemove())
+            
+            await state.update_data(contact=phone)
             await state.set_state(StepsForm.CONFIRM_BOOKING)
         else:
-            # await message.answer(f'Неверный номер {phone}, повторите еще раз')
+            keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
+            keyboard_builder.button(text='Вернуться к вводу телефона') #далее создаем кнопки
+
+
+            await message.answer(f'Неверный номер {message.text}, повторите ввод', 
+                                    reply_markup=keyboard_builder.as_markup(resize_keyboard=True, #Указываем настройки клавиатуры
+                                    one_time_leyboard=True,
+                                    input_field_placeholder=''                               
+                                    )
+                                )
             await state.set_state(StepsForm.GET_CONTACT)
-            return await get_contact()
+
     
     
 
@@ -138,6 +209,12 @@ async def confirm_booking(message: Message, state: FSMContext):
 
     await message.answer(f'{date}, {persons}, {contact}')
     await state.clear()
+
+
+
+
+
+
 
 ################################################
 #Блок стартовых функций#########################
@@ -176,8 +253,7 @@ async def start():
     dp.message.register(get_start, Command(commands=['start'])) #Регистрируем хэндлер на команду /startdp.message.register(get_start, Command(commands=['start'])) #Регистрируем хэндлер на команду /start
     dp.message.register(get_start, Command(commands=['new_reservation'])) #Регистрируем хэндлер на команду /startdp.message.register(get_start, Command(commands=['start'])) #Регистрируем хэндлер на команду /start
     dp.message.register(get_booking, F.text=='Забронировать билет')
-
-
+    dp.callback_query.register(get_contact, F.data=='day', StepsForm.GET_CONTACT) #Регистрируем колбэки 
 
     dp.message.register(get_booking, StepsForm.GET_DIRECTION)         #После введении имени переходим в функцию которая
     dp.message.register(get_date, StepsForm.GET_DATE)         #После введении имени переходим в функцию которая
