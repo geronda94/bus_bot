@@ -75,8 +75,19 @@ def get_days():
 
     return months
 
-# for month_name, date_list in get_days().items():
-#         print(month_name)
-#         for day in date_list:
-#             print(day)
+def check_date_format(date: str):
+    if len(date) == 5:
+        for i in range(len(date)):
+            if i != 2 and date[i].isdigit():
+                continue
+            elif i==2 and date[i] =='/':
+                continue
+            else:
+                return False
+        return True
+
+
+    else:
+        return False
+    
 
