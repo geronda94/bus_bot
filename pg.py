@@ -111,6 +111,15 @@ class BotDB:
     def select_services(self):
         return self.__request.selectd('SELECT * FROM services;')
     
+    def insert_order(self, tg_id, name, phone, passagers, route_datetime, route_direction):
+        try:
+            self.__request.insert('INSERT INTO orders(tg_id, name, phone, passagers, order_datetime, route_datetime, route_direction, order_status) VALUES(%s, %s, %s, %s, %s, %s, %s, %s)', 
+                                  (tg_id, name, phone, passagers, datetime_now(), route_datetime, route_direction, 'posted'))
+            return True
+        except Exception as ex:
+            print(ex)
+            return False
+    
 
 
 

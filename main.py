@@ -11,7 +11,7 @@ from aiogram.utils.keyboard import  ReplyKeyboardBuilder
 from pg import db_bot
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
-from function import number_validator, get_days, check_date_format
+from function import number_validator, get_days, check_date_format, format_date, week_days_names
 
 
 
@@ -72,8 +72,9 @@ async def get_booking(message: Message, state: FSMContext):
     for i in services:
         keyboard_builder.button(text=f'{i.get("service_name")}') #далее создаем кнопки
 
-    keyboard_builder.adjust(3,3)
-    await message.answer('Укажите направление',reply_markup=keyboard_builder.as_markup(resize_keyboard=True, #Указываем настройки клавиатуры
+    keyboard_builder.adjust(1,)
+    await message.answer('Укажите направление',reply_markup=keyboard_builder.as_markup(
+                                #resize_keyboard=True, #Указываем настройки клавиатуры
                                one_time_leyboard=True,
                                input_field_placeholder=''                               
                                ))
@@ -83,40 +84,77 @@ async def get_booking(message: Message, state: FSMContext):
 
 
 async def get_date(message: Message, state: FSMContext):
-    services_list = [x.get('service_name') for x in db_bot.select_services()]
+    services = db_bot.select_services()
+    services_list = [x.get('service_name') for x in services]
     context_data = await state.get_data()
     state_direction = context_data.get('direction')
 
 
+    if message.text in services_list:
+        
+        calendar_list = []
+        service_days = ''
+
+        for service in services:
+            if str(message.text) == (service.get('service_name')):
+                service_days = service.get('week_days')
+                service_price = service.get('service_price')
 
 
-    calendar_list = []
-    for month_name, date_list in get_days().items():
-        calendar_list.append([KeyboardButton(text=f'{month_name}')])
+        days_list = get_days(service_days).items()
+        print(days_list)
+        for month_name, date_list in days_list:
+            calendar_list.append([KeyboardButton(text=f'{month_name}')])            
+    
+            date_list_buttons = []
+            count_days = 0
+            last_count = len(date_list) %5
+
+            for i in range(len(date_list)):
+                day = date_list[i]
+
+                date_list_buttons.append(KeyboardButton(text=f'{day}'))
+                count_days +=1           
+                
+
+                
+                if count_days == 5:
+                    calendar_list.append(date_list_buttons)
+                    count_days = 0
+                    date_list_buttons = []
+                if (len(date_list) - i < 5) and (last_count == count_days):
+                        for i in range(5- len(date_list_buttons)):
+                            date_list_buttons.append(KeyboardButton(text=f'  '))
+                        calendar_list.append(date_list_buttons)
+                        count_days = 0
+                        date_list_buttons = []
+
+                            
+
+    
+        #await message.answer(f'Рейс: <b>{message.text}</b>', reply_markup=ReplyKeyboardRemove())
+        await message.answer(f'Рейс: <b>{message.text}</b> \nОтправление: <b>{week_days_names(service_days=service_days)}</b>\nЦена билета: <b>{service_price} грн. </b>')
         
 
-        date_list_buttons = []
-        count_days = 0
-        for day in date_list:
-            day_split = str(day.split('/')[-1])
-            date_list_buttons.append(KeyboardButton(text=f'{day}'))
-            count_days +=1
-            if count_days ==5:
-                calendar_list.append(date_list_buttons)
-                count_days = 0
-                date_list_buttons = []
 
-    if message.text in services_list:
-        await message.answer(f'Рейс: <b>{message.text}</b>', reply_markup=ReplyKeyboardRemove())
-         
-
-        await message.answer("Выберите дату отправления", reply_markup=ReplyKeyboardMarkup(keyboard=calendar_list))
+        await message.answer("Выберите дату отправления", reply_markup=ReplyKeyboardMarkup(keyboard=calendar_list,
+                                                                        resize_keyboard=True, #Делает кнопки меньше
+                                                                        one_time_keyboard=True, #Скрывает клавиатуру после нажатия
+                                                                        input_field_placeholder='Нельзя вводить текст, выберите кнопку', #Подсказка в виде надписи в поле ввода
+                                                                        selective=True #Показывает клавиатуру только тому кто ее вызвал(актуально в группах)
+                                                                        ))
 
         await state.update_data(direction=message.text)  
         await state.set_state(StepsForm.GET_CONTACT)
     
     elif state_direction:
-        await message.answer(f'Рейс: <b>{state_direction}</b>', reply_markup=ReplyKeyboardMarkup(keyboard=calendar_list))
+        await message.answer(f'Рейс: <b>{state_direction}</b>', reply_markup=ReplyKeyboardMarkup(keyboard=calendar_list,
+                                                                        resize_keyboard=True, #Делает кнопки меньше
+                                                                        one_time_keyboard=True, #Скрывает клавиатуру после нажатия
+                                                                        input_field_placeholder='Нельзя вводить текст, выберите кнопку', #Подсказка в виде надписи в поле ввода
+                                                                        selective=True #Показывает клавиатуру только тому кто ее вызвал(актуально в группах)
+                                                                        ))
+
         await state.set_state(StepsForm.GET_CONTACT)
     else:
         keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
@@ -124,9 +162,9 @@ async def get_date(message: Message, state: FSMContext):
 
 
         await message.answer(f'Неверное направление, повторите ввод', 
-                                reply_markup=keyboard_builder.as_markup(resize_keyboard=True, #Указываем настройки клавиатуры
-                                one_time_leyboard=True,
-                                input_field_placeholder=''))
+                                reply_markup=keyboard_builder.as_markup( #Указываем настройки клавиатуры
+                                                                        one_time_leyboard=True,
+                                                                        input_field_placeholder=''))
         await state.set_state(StepsForm.GET_DIRECTION)
 
 
@@ -219,17 +257,37 @@ async def get_persons(message: Message, state:FSMContext):
     
     
 
-async def confirm_booking(message: Message, state: FSMContext):
+async def confirm_booking(message: Message, state: FSMContext, bot: Bot):
     if message.text.isdigit():
         await state.update_data(persons=message.text)
         context_data = await state.get_data()
 
         direction = context_data.get('direction')
-        date = context_data.get('date')
+        date = format_date(context_data.get('date')).strftime('%Y-%m-%d')
         contact = context_data.get('contact')
         persons = context_data.get('persons')
 
-        await message.answer(f'Направление: <b>{direction}</b>, \nДата отправления: <b>{date}</b>, \nМест: <b>{persons}</b> , \nКонтакты: <b>{contact}</b> \n https://t.me/{contact}', reply_markup=ReplyKeyboardRemove())
+
+
+        ticket_price = 0
+        total_price = 0
+        services = db_bot.select_services()
+        for service in services:
+            if direction == (service.get('service_name')):
+                ticket_price = int(service.get('service_price'))
+                total_price = ticket_price*int(persons)
+
+
+
+        
+        await message.answer(f'Направление: <b>{direction}</b>, \nДата отправления: <b>{date}</b>, \nМест: <b>{persons}</b> , \nКонтакты: <b>{contact}</b> \n https://t.me/{contact} \n\nЦена билета: <b>{ticket_price} грн.</b>\nИтого: <b>{total_price}</b> грн.', reply_markup=ReplyKeyboardRemove())
+        insert_result = db_bot.insert_order(tg_id=message.from_user.id, name=message.from_user.full_name, phone=contact, passagers=persons, route_datetime=date, route_direction=direction)
+        if insert_result:
+            await bot.send_message(ADMIN, 'Успешно добавлен заказ в базу')
+        else:
+            await bot.send_message(ADMIN, 'Не добавлен заказ в базу, сейчас вышлю сюда')
+            await bot.send_message(ADMIN, f'Направление: <b>{direction}</b>, \nДата отправления: <b>{date}</b>, \nМест: <b>{persons}</b> , \nКонтакты: <b>{contact}</b> \n https://t.me/{contact} \n\nЦена билета: <b>{ticket_price} грн.</b>\nИтого: <b>{total_price}</b> грн.')
+
         await state.clear()
     else:
         keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
