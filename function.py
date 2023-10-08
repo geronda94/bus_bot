@@ -157,32 +157,32 @@ def format_date(date: str):
 
 
 
-days_list = get_days('').items()
-calendar_list = []
+# days_list = get_days('').items()
+# calendar_list = []
 
-for month_name, date_list in days_list:
-    calendar_list.append(month_name)            
+# for month_name, date_list in days_list:
+#     calendar_list.append(month_name)            
 
-    date_list_buttons = []
-    count_days = 0
-    last_count = len(date_list) %5
+#     date_list_buttons = []
+#     count_days = 0
+#     last_count = len(date_list) %5
 
-    for i in range(len(date_list)):
-        day = date_list[i]
+#     for i in range(len(date_list)):
+#         day = date_list[i]
 
-        date_list_buttons.append(day)
-        count_days +=1   
+#         date_list_buttons.append(day)
+#         count_days +=1   
 
-        if count_days == 5:
-            calendar_list.append(date_list_buttons)
-            count_days = 0
-            date_list_buttons = []
-        if (len(date_list) - i < 5) and (last_count == count_days):
-            for i in range(5- len(date_list_buttons)):
-                date_list_buttons.append(' ')
-            calendar_list.append(date_list_buttons)
-            count_days = 0
-            date_list_buttons = []
+#         if count_days == 5:
+#             calendar_list.append(date_list_buttons)
+#             count_days = 0
+#             date_list_buttons = []
+#         if (len(date_list) - i < 5) and (last_count == count_days):
+#             for i in range(5- len(date_list_buttons)):
+#                 date_list_buttons.append(' ')
+#             calendar_list.append(date_list_buttons)
+#             count_days = 0
+#             date_list_buttons = []
 
 
 

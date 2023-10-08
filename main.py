@@ -1,3 +1,4 @@
+import time
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Filter, Command
 import asyncio
@@ -5,23 +6,23 @@ from environs import Env
 import logging #импортируем библиотеку логирования
 from aiogram.types import BotCommand, BotCommandScopeDefault #Узнать про скопы
 from aiogram.types import Message, ContentType, Contact
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton,KeyboardButtonPollType, ReplyKeyboardRemove
-from aiogram.utils.keyboard import  ReplyKeyboardBuilder
-
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton,KeyboardButtonPollType, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.utils.keyboard import  ReplyKeyboardBuilder, InlineKeyboardBuilder
 from pg import db_bot
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
 from function import number_validator, get_days, check_date_format, format_date, week_days_names
-
-
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 
 #Блок инициализации#############################
 # env = Env()                                    #
 # env.read_env('.env')                           #
 # TOKEN = env.str('TOKEN')                       #
 # ADMIN = env.int('ADMIN_ID')       
-TOKEN = '6326240605:AAFqzb08jfCCDcJhwUuT2Z6YfxCgFUqFh5A'
+TOKEN = '6363512631:AAFXzcTrJVhHrB-fwKcpuPWn6kA27uQvsxk'
 ADMIN = '6458439503'
+ADMINS = ['5767451685','6458439503']
 ################################################
 
 
@@ -31,8 +32,8 @@ ADMIN = '6458439503'
 async def set_commands(bot: Bot):
     commands = [
         BotCommand(command='new_reservation', description='Новая бронь'),
-        BotCommand(command='schedule', description='Расписание'),
-        BotCommand(command='my_reservation', description='Моя история'),
+        BotCommand(command='catalog', description='Каталог'),
+        BotCommand(command='history', description='История'),
     ]
 
     await bot.set_my_commands(commands, BotCommandScopeDefault()) #Скоп по умолчанию|ПОказывает команды всем
@@ -51,11 +52,15 @@ class StepsForm(StatesGroup):
     CONFIRM_BOOKING = State()
 
 
+
+
 #Формируем кнопки через билдер from aiogram.utils.keyboard import ReplyKeyboardBuilder
 async def booking_button(state: FSMContext):
     await state.clear()
     keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
+
     keyboard_builder.button(text='Забронировать билет') #далее создаем кнопки
+
 
     await state.set_state(StepsForm.GET_DIRECTION)
     return keyboard_builder.as_markup(resize_keyboard=True, #Указываем настройки клавиатуры
@@ -254,8 +259,7 @@ async def get_persons(message: Message, state:FSMContext):
 
         await state.set_state(StepsForm.CONFIRM_BOOKING)
 
-    
-    
+  
 
 async def confirm_booking(message: Message, state: FSMContext, bot: Bot):
     if message.text.isdigit():
@@ -281,12 +285,11 @@ async def confirm_booking(message: Message, state: FSMContext, bot: Bot):
 
         
         await message.answer(f'Направление: <b>{direction}</b>, \nДата отправления: <b>{date}</b>, \nМест: <b>{persons}</b> , \nКонтакты: <b>{contact}</b> \n https://t.me/{contact} \n\nЦена билета: <b>{ticket_price} грн.</b>\nИтого: <b>{total_price}</b> грн.', reply_markup=ReplyKeyboardRemove())
-        insert_result = db_bot.insert_order(tg_id=message.from_user.id, name=message.from_user.full_name, phone=contact, passagers=persons, route_datetime=date, route_direction=direction)
-        if insert_result:
-            await bot.send_message(ADMIN, 'Успешно добавлен заказ в базу')
-        else:
-            await bot.send_message(ADMIN, 'Не добавлен заказ в базу, сейчас вышлю сюда')
-            await bot.send_message(ADMIN, f'Направление: <b>{direction}</b>, \nДата отправления: <b>{date}</b>, \nМест: <b>{persons}</b> , \nКонтакты: <b>{contact}</b> \n https://t.me/{contact} \n\nЦена билета: <b>{ticket_price} грн.</b>\nИтого: <b>{total_price}</b> грн.')
+        insert_result = db_bot.insert_order( tg_id=message.from_user.id, name=message.from_user.full_name, phone=contact, passagers=persons, route_datetime=date, route_direction=direction, price=ticket_price, total_price=total_price)
+        if not insert_result:
+            for admin in ADMINS:            
+                await bot.send_message(admin, 'Не добавлен заказ в базу, сейчас вышлю сюда')
+                await bot.send_message(admin, f'Направление: <b>{direction}</b>, \nДата отправления: <b>{date}</b>, \nМест: <b>{persons}</b> , \nКонтакты: <b>{contact}</b> \n https://t.me/{contact} \n\nЦена билета: <b>{ticket_price} грн.</b>\nИтого: <b>{total_price}</b> грн.')
 
         await state.clear()
     else:
@@ -301,19 +304,115 @@ async def confirm_booking(message: Message, state: FSMContext, bot: Bot):
 
 
 
+#SCHEDULER FUNCTIONS
 
+
+async def parse_orders(bot: Bot):
+
+    extract = db_bot.select_new_orders()
+    #Извлекаем не обработанные заявки
+    if len(extract) > 0:
+        for i in extract:
+            order_id = i.get('id')
+            user_id = i.get('tg_id')
+            name = i.get('name')
+            phone = i.get('phone')
+            passagers = i.get('passagers')
+            order_datetime = i.get('order_datetime').strftime('%d-%m-%Y')
+            route_datetime = i.get('route_datetime').strftime('%d-%m-%Y')
+            route_direction = i.get('route_direction')
+            price = i.get('price')
+            total_price = i.get('total_price')
+            route_id = i.get('route_id')
+            order_status = i.get('order_status')
+
+            booking_text = f"✅ Новая бронь {order_id} ✅ \n\nНаправление: <b>{route_direction}</b>\nЧисло: <b>{route_datetime}</b>\nКоличество пассажиров: <b>{passagers}</b>\
+                \nЦена билета: <b>{price}грн.</b>\nИтого: <b>{total_price}грн.</b>\
+                \n\nИмя: <b>{name}</b>\nТелефон: <b>{phone}</b>\nТелеграм: <b>https://t.me/{phone}</b>\n  \n\nid Пользователя: <b>{user_id}</b>\nЗаказ опубликован: <b>{order_datetime}</b>"
+
+            res = db_bot.set_order_status(order_status='showed', order_id=order_id)
+            for admin in ADMINS:
+                await bot.send_message(admin, text=booking_text)
+                await bot.send_message(admin, text=f'{phone}')
+
+            time.sleep(1)
+
+
+
+async def get_catalog(message: Message):
+    services = db_bot.select_services()
+    service_items = ''
+
+    for i in services:
+        service_id = i.get('id') 
+        name = i.get('service_name')
+        price = i.get("service_price")
+        week_days = week_days_names(i.get('week_days'))
+
+        service_item = f'<b>{name}</b>\nЦена билета: <b>{price}</b> грн.\nОтправление: <b>{week_days}</b> \n\n'
+        service_items += service_item
+        
+    keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
+    keyboard_builder.button(text='Забронировать билет') #далее создаем кнопки
+
+    await message.answer(service_items, reply_markup=keyboard_builder.as_markup(resize_keyboard=True,#Указываем настройки клавиатуры
+                                                                                    one_time_leyboard=True,
+                                                                                    input_field_placeholder=''                                                                            
+                                                                                    ))
+
+async def get_orders_history(message: Message):
+    user_id = str(message.from_user.id)
+    history = db_bot.get_user_orders(user_id=user_id)
+    orders = ''
+    if history:
+        for i in history:
+            order_id = i.get('id')
+            name = i.get('name')
+            phone = i.get('phone')
+            passagers = i.get('passagers')
+            order_datetime = i.get('order_datetime').strftime('%d-%m-%Y')
+            route_datetime = i.get('route_datetime').strftime('%d-%m-%Y')
+            route_direction = i.get('route_direction')
+            route_id = i.get('route_id')
+            order_status = i.get('order_status')
+
+            order = f'Бронь от <b>{order_datetime}</b>\n{route_direction}\nДата отправления: <b>{route_datetime}</b>\nБилетов забронированно: <b>{passagers}</b>\n\n\n'
+            
+            await message.answer(order)
+    else:
+        await message.answer('У Вас пока нету заявок')
+
+
+
+async def post_post(message: Message):
+    # await bot.send_message(ADMIN, 'Hello')
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[ [
+                InlineKeyboardButton(text='Заказать билеты', url='https://t.me/OsessaBussTour_bot'),
+            ]
+        ])
+    if str(message.from_user.id) in ADMINS:
+        await message.answer(text='Теперь доступна онлайн бронь билетов через телеграм бот', reply_markup=keyboard)
+
+
+
+
+
+################################
 
 ################################################
 #Блок стартовых функций#########################
     
 async def start_bot(bot: Bot): #функция срабатывает когда запускается сервер с ботом
     await set_commands(bot)
-    await bot.send_message(ADMIN, text='Бот запущен!')
+    for admin in ADMINS:
+        await bot.send_message(admin, text='Бот запущен!')
 async def stop_bot(bot: Bot):
-    await bot.send_message(ADMIN, text='<s>Бот остановлен</s>')
+    for admin in ADMINS:
+        await bot.send_message(admin, text='<s>Бот остановлен</s>')
 
 async def get_start(message: Message): #Функция срабатывает когда юзер дает команду /start
     keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
+    keyboard_builder.button(text='Посмотреть каталог') #далее создаем кнопки
     keyboard_builder.button(text='Забронировать билет') #далее создаем кнопки
     await message.answer('Давай начнем!',reply_markup=keyboard_builder.as_markup(resize_keyboard=True, #Указываем настройки клавиатуры
                                one_time_leyboard=True,
@@ -335,11 +434,17 @@ async def start():
     dp.startup.register(start_bot) #Регистрируем хэндлер срабатывающий при запуске
     dp.shutdown.register(stop_bot)
 
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(parse_orders, 'interval', seconds=5, args=(bot,))
 
 
-    dp.message.register(get_start, Command(commands=['start'])) #Регистрируем хэндлер на команду /startdp.message.register(get_start, Command(commands=['start'])) #Регистрируем хэндлер на команду /start
+    dp.message.register(get_start, Command(commands=['start'])) #Регистрируем хэндлер на команду /startdp.message.register(get_start, Command(commands=['start'])) #Регистрируем хэндлер на команду /start#Регистрируем хэндлер на команду /startdp.message.register(get_start, Command(commands=['start'])) #Регистрируем хэндлер на команду /start
     dp.message.register(get_start, Command(commands=['new_reservation'])) #Регистрируем хэндлер на команду /startdp.message.register(get_start, Command(commands=['start'])) #Регистрируем хэндлер на команду /start
+    dp.message.register(get_orders_history, Command(commands=['history'])) #Регистрируем хэндлер на команду /startdp.message.register(get_start, Command(commands=['start'])) #Регистрируем хэндлер на команду /start
+    dp.message.register(get_catalog, Command(commands=['catalog'])) #Регистрируем хэндлер на команду /startdp.message.register(get_start, Command(commands=['start'])) #Регистрируем хэндлер на команду /start
+    dp.message.register(get_catalog, F.text=='Посмотреть каталог')
     dp.message.register(get_booking, F.text=='Забронировать билет')
+    dp.message.register(post_post, F.text=='Запостить пост')
 
 
     dp.message.register(get_booking, StepsForm.GET_DIRECTION)         #После введении имени переходим в функцию которая
@@ -349,10 +454,10 @@ async def start():
     dp.message.register(confirm_booking, StepsForm.CONFIRM_BOOKING)         #После введении имени переходим в функцию которая
 
 
-
-
     try:
         #Начало сессии
+        scheduler.start()
+        
         await dp.start_polling(bot)
     finally:
         #Закрываем сессию

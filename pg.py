@@ -111,17 +111,34 @@ class BotDB:
     def select_services(self):
         return self.__request.selectd('SELECT * FROM services;')
     
-    def insert_order(self, tg_id, name, phone, passagers, route_datetime, route_direction):
+    def insert_order(self, tg_id, name, phone, passagers, route_datetime, route_direction, price, total_price):
         try:
-            self.__request.insert('INSERT INTO orders(tg_id, name, phone, passagers, order_datetime, route_datetime, route_direction, order_status) VALUES(%s, %s, %s, %s, %s, %s, %s, %s)', 
-                                  (tg_id, name, phone, passagers, datetime_now(), route_datetime, route_direction, 'posted'))
+            self.__request.insert('INSERT INTO orders(tg_id, name, phone, passagers, order_datetime, route_datetime, route_direction, order_status, price, total_price) VALUES(%s, %s,%s, %s, %s, %s, %s, %s, %s, %s)', 
+                                  (tg_id, name, phone, passagers, datetime_now(), route_datetime, route_direction, 'posted', price, total_price))
             return True
         except Exception as ex:
             print(ex)
             return False
+        
+    def select_new_orders(self):
+        return self.__request.selectd('SELECT * FROM orders WHERE order_status = %s',('posted',))
     
+    def set_order_status(self, order_id, order_status):
+        try:
+            self.__request.insert('UPDATE orders SET order_status = %s WHERE id = %s', (str(order_status), str(order_id)))
+            return True
+            
+        except Exception as ex:
 
-
+            return False
+    
+    def get_user_orders(self, user_id):
+        try:
+            orders = self.__request.selectd('SELECT * FROM orders WHERE tg_id = %s;',(str(user_id),))
+            return orders
+        except Exception as ex:
+            print(ex)
+            return False
 
 
 connect = PgConnect(host=DB.host, port=DB.port, database=DB.database, user=DB.user, password=DB.password)
@@ -130,3 +147,5 @@ request_db = PgRequest(connect)
 db_bot = BotDB(request_db)
 
 
+# for i in db_bot.get_user_orders('6458439503'):
+#     print(i)
