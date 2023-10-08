@@ -427,7 +427,7 @@ async def get_start(message: Message): #Функция срабатывает к
 
 #Тело бота#####################################
 async def start():
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(name)s -(%(filename)s).%(funcName)s(%(lineno)d) - %(message)s")
+    #logging.basicConfig(level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(name)s -(%(filename)s).%(funcName)s(%(lineno)d) - %(message)s")
 
     bot = Bot(token=TOKEN, parse_mode="HTML")
     dp = Dispatcher()
