@@ -107,7 +107,6 @@ async def get_date(message: Message, state: FSMContext):
 
 
         days_list = get_days(service_days).items()
-        print(days_list)
         for month_name, date_list in days_list:
             calendar_list.append([KeyboardButton(text=f'{month_name}')])            
     
