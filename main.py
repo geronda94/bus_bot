@@ -1,3 +1,4 @@
+import datetime
 import time
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Filter, Command
@@ -11,7 +12,7 @@ from aiogram.utils.keyboard import  ReplyKeyboardBuilder, InlineKeyboardBuilder
 from pg import db_bot
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
-from function import number_validator, get_days, check_date_format, format_date, week_days_names
+from function import number_validator, get_days, check_date_format, format_date, week_days_name, week_days_names, check_time_format
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -20,9 +21,10 @@ from apscheduler.triggers.interval import IntervalTrigger
 # env.read_env('.env')                           #
 # TOKEN = env.str('TOKEN')                       #
 # ADMIN = env.int('ADMIN_ID')       
-TOKEN = '6363512631:AAFXzcTrJVhHrB-fwKcpuPWn6kA27uQvsxk'
+# TOKEN = '6363512631:AAFXzcTrJVhHrB-fwKcpuPWn6kA27uQvsxk'
+TOKEN = '6602942175:AAHUo9uYfUiOB6YekUBc_jjjmLfjXBsWOMc'
 ADMIN = '6458439503'
-ADMINS = ['5767451685','6458439503']
+ADMINS = ['6458439503'] #'5767451685'
 ################################################
 
 
@@ -47,6 +49,7 @@ async def set_commands(bot: Bot):
 class StepsForm(StatesGroup):
     GET_DIRECTION = State()
     GET_DATE = State()
+    GET_TIME = State()
     GET_CONTACT = State()
     GET_PERSONS = State()
     CONFIRM_BOOKING = State()
@@ -56,7 +59,7 @@ class StepsForm(StatesGroup):
 
 #Формируем кнопки через билдер from aiogram.utils.keyboard import ReplyKeyboardBuilder
 async def booking_button(state: FSMContext):
-    await state.clear()
+    
     keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
 
     keyboard_builder.button(text='Забронировать билет') #далее создаем кнопки
@@ -71,6 +74,7 @@ async def booking_button(state: FSMContext):
 
 
 async def get_booking(message: Message, state: FSMContext):
+    await state.clear()
     services = db_bot.select_services()
 
     keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок 
@@ -88,6 +92,9 @@ async def get_booking(message: Message, state: FSMContext):
     await state.set_state(StepsForm.GET_DATE)
 
 
+
+
+
 async def get_date(message: Message, state: FSMContext):
     services = db_bot.select_services()
     services_list = [x.get('service_name') for x in services]
@@ -103,6 +110,7 @@ async def get_date(message: Message, state: FSMContext):
         for service in services:
             if str(message.text) == (service.get('service_name')):
                 service_days = service.get('week_days')
+                start_city = service.get('start_city')
                 service_price = service.get('service_price')
 
 
@@ -149,7 +157,8 @@ async def get_date(message: Message, state: FSMContext):
                                                                         ))
 
         await state.update_data(direction=message.text)  
-        await state.set_state(StepsForm.GET_CONTACT)
+        await state.update_data(start_city=str(start_city))  
+        await state.set_state(StepsForm.GET_TIME)
     
     elif state_direction:
         await message.answer(f'Рейс: <b>{state_direction}</b>', reply_markup=ReplyKeyboardMarkup(keyboard=calendar_list,
@@ -159,7 +168,7 @@ async def get_date(message: Message, state: FSMContext):
                                                                         selective=True #Показывает клавиатуру только тому кто ее вызвал(актуально в группах)
                                                                         ))
 
-        await state.set_state(StepsForm.GET_CONTACT)
+        await state.set_state(StepsForm.GET_TIME)
     else:
         keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
         keyboard_builder.button(text='Вернуться к выбору направления') #далее создаем кнопки
@@ -172,29 +181,43 @@ async def get_date(message: Message, state: FSMContext):
         await state.set_state(StepsForm.GET_DIRECTION)
 
 
-async def get_contact(message: Message, bot: Bot, state: FSMContext):
+
+
+async def get_clock(message: Message, bot: Bot, state: FSMContext):
     context_data = await state.get_data()
+    start_city = str(context_data.get('start_city'))
     state_date = context_data.get('date')
+    
 
     if check_date_format(message.text):
+        week_day = str(datetime.datetime.weekday(format_date(message.text))+1)
+        clock_list = db_bot.select_clock(route=start_city, wday=week_day)
+        
         keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
-        keyboard_builder.button(text='Отправить текущий номер из Telegram', request_contact=True)
-        await message.answer('Ваши данные для связи: ', reply_markup=keyboard_builder.as_markup(resize_keyboard=True, #Указываем настройки клавиатуры
+        for i in clock_list:
+            keyboard_builder.button(text=str(i.get('service_time')))
+            
+        await message.answer('Выберите время: ', reply_markup=keyboard_builder.as_markup(resize_keyboard=True, #Указываем настройки клавиатуры
                                 one_time_leyboard=True,
                                 input_field_placeholder=''                               
                                 ))
         
         await state.update_data(date=message.text)
-        await state.set_state(StepsForm.GET_PERSONS)
+        await state.set_state(StepsForm.GET_CONTACT)
     
     elif state_date:
+        week_day = str(datetime.datetime.weekday(format_date(str(state_date)))+1)
+        clock_list = db_bot.select_clock(route=start_city, wday=week_day)
+        
         keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
-        keyboard_builder.button(text='Отправить текущий номер из Telegram', request_contact=True)
+        for i in clock_list:
+            keyboard_builder.button(text=str(i.get('service_time')))
+            
         await message.answer('Ваши данные для связи: ', reply_markup=keyboard_builder.as_markup(resize_keyboard=True, #Указываем настройки клавиатуры
                                 one_time_leyboard=True,
                                 input_field_placeholder=''                               
                                 ))
-        await state.set_state(StepsForm.GET_PERSONS)
+        await state.set_state(StepsForm.GET_CONTACT)
 
 
     else:
@@ -209,6 +232,47 @@ async def get_contact(message: Message, bot: Bot, state: FSMContext):
                                 )
                             )
         await state.set_state(StepsForm.GET_DATE)
+
+
+
+
+async def get_contact(message: Message, bot: Bot, state: FSMContext):
+    context_data = await state.get_data()
+    state_time = context_data.get('order_time')
+
+    if check_time_format(message.text):
+        keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
+        keyboard_builder.button(text='Отправить текущий номер из Telegram', request_contact=True)
+        await message.answer('Ваши данные для связи: ', reply_markup=keyboard_builder.as_markup(resize_keyboard=True, #Указываем настройки клавиатуры
+                                one_time_leyboard=True,
+                                input_field_placeholder=''                               
+                                ))
+        
+        await state.update_data(order_time=message.text)
+        await state.set_state(StepsForm.GET_PERSONS)
+    
+    elif state_time:
+        keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
+        keyboard_builder.button(text='Отправить текущий номер из Telegram', request_contact=True)
+        await message.answer('Ваши данные для связи: ', reply_markup=keyboard_builder.as_markup(resize_keyboard=True, #Указываем настройки клавиатуры
+                                one_time_leyboard=True,
+                                input_field_placeholder=''                               
+                                ))
+        await state.set_state(StepsForm.GET_PERSONS)
+
+
+    else:
+        keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
+        keyboard_builder.button(text='Вернуться к вводу времени') #далее создаем кнопки
+
+
+        await message.answer(f'Неверный формат времени, повторите ввод', 
+                                reply_markup=keyboard_builder.as_markup(resize_keyboard=True, #Указываем настройки клавиатуры
+                                one_time_leyboard=True,
+                                input_field_placeholder=''                               
+                                )
+                            )
+        await state.set_state(StepsForm.GET_TIME)
 
 
 
@@ -269,6 +333,7 @@ async def confirm_booking(message: Message, state: FSMContext, bot: Bot):
         date = format_date(context_data.get('date')).strftime('%Y-%m-%d')
         contact = context_data.get('contact')
         persons = context_data.get('persons')
+        order_time = context_data.get('order_time')
 
 
 
@@ -282,13 +347,13 @@ async def confirm_booking(message: Message, state: FSMContext, bot: Bot):
 
 
 
-        
-        await message.answer(f'Направление: <b>{direction}</b>, \nДата отправления: <b>{date}</b>, \nМест: <b>{persons}</b> , \nКонтакты: <b>{contact}</b> \n https://t.me/{contact} \n\nЦена билета: <b>{ticket_price} грн.</b>\nИтого: <b>{total_price}</b> грн.', reply_markup=ReplyKeyboardRemove())
-        insert_result = db_bot.insert_order( tg_id=message.from_user.id, name=message.from_user.full_name, phone=contact, passagers=persons, route_datetime=date, route_direction=direction, price=ticket_price, total_price=total_price)
+        route_datetime = f"{date} {order_time}"
+        await message.answer(f'Направление: <b>{direction}</b>, \nОтправление: <b>{route_datetime}</b>, \nМест: <b>{persons}</b> , \nКонтакты: <b>{contact}</b> \n https://t.me/{contact} \n\nЦена билета: <b>{ticket_price} грн.</b>\nИтого: <b>{total_price}</b> грн.', reply_markup=ReplyKeyboardRemove())
+        insert_result = db_bot.insert_order( tg_id=message.from_user.id, name=message.from_user.full_name, phone=contact, passagers=persons, route_datetime=route_datetime, route_direction=direction, price=ticket_price, total_price=total_price)
         if not insert_result:
             for admin in ADMINS:            
                 await bot.send_message(admin, 'Не добавлен заказ в базу, сейчас вышлю сюда')
-                await bot.send_message(admin, f'Направление: <b>{direction}</b>, \nДата отправления: <b>{date}</b>, \nМест: <b>{persons}</b> , \nКонтакты: <b>{contact}</b> \n https://t.me/{contact} \n\nЦена билета: <b>{ticket_price} грн.</b>\nИтого: <b>{total_price}</b> грн.')
+                await bot.send_message(admin, f'Направление: <b>{direction}</b>, \nОтправление: <b>{route_datetime}</b>, \nМест: <b>{persons}</b> , \nКонтакты: <b>{contact}</b> \n https://t.me/{contact} \n\nЦена билета: <b>{ticket_price} грн.</b>\nИтого: <b>{total_price}</b> грн.')
 
         await state.clear()
     else:
@@ -317,15 +382,15 @@ async def parse_orders(bot: Bot):
             name = i.get('name')
             phone = i.get('phone')
             passagers = i.get('passagers')
-            order_datetime = i.get('order_datetime').strftime('%d-%m-%Y')
-            route_datetime = i.get('route_datetime').strftime('%d-%m-%Y')
+            order_datetime = i.get('order_datetime').strftime('%d-%m-%Y %H:%M')
+            route_datetime = i.get('route_datetime').strftime('%d-%m-%Y %H:%M')
             route_direction = i.get('route_direction')
             price = i.get('price')
             total_price = i.get('total_price')
             route_id = i.get('route_id')
             order_status = i.get('order_status')
 
-            booking_text = f"✅ Новая бронь {order_id} ✅ \n\nНаправление: <b>{route_direction}</b>\nЧисло: <b>{route_datetime}</b>\nКоличество пассажиров: <b>{passagers}</b>\
+            booking_text = f"✅ Новая бронь {order_id} ✅ \n\nНаправление: <b>{route_direction}</b>\nОтправление: <b>{route_datetime}</b>\nКоличество пассажиров: <b>{passagers}</b>\
                 \nЦена билета: <b>{price}грн.</b>\nИтого: <b>{total_price}грн.</b>\
                 \n\nИмя: <b>{name}</b>\nТелефон: <b>{phone}</b>\nТелеграм: <b>https://t.me/{phone}</b>\n  \n\nid Пользователя: <b>{user_id}</b>\nЗаказ опубликован: <b>{order_datetime}</b>"
 
@@ -346,9 +411,20 @@ async def get_catalog(message: Message):
         service_id = i.get('id') 
         name = i.get('service_name')
         price = i.get("service_price")
-        week_days = week_days_names(i.get('week_days'))
+        # week_days = week_days_names(i.get('week_days'))
+        start_city = i.get('start_city')
+        start_time = db_bot.get_start_clock(start_city=start_city)
 
-        service_item = f'<b>{name}</b>\nЦена билета: <b>{price}</b> грн.\nОтправление: <b>{week_days}</b> \n\n'
+        schedule =''
+        schedule_days = {x.get('service_day'):'' for x in start_time}
+        for i in start_time:
+            schedule_days[i.get('service_day')] += i.get('service_time') +' '
+
+        for key, val in schedule_days.items():
+            schedule+= f'{week_days_name(key)} {val}|'
+
+        
+        service_item = f'<b>{name}</b>\nЦена билета: <b>{price}</b> грн.\nОтправление: \n<b>{schedule}</b> \n\n'
         service_items += service_item
         
     keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
@@ -448,6 +524,7 @@ async def start():
 
     dp.message.register(get_booking, StepsForm.GET_DIRECTION)         #После введении имени переходим в функцию которая
     dp.message.register(get_date, StepsForm.GET_DATE)         #После введении имени переходим в функцию которая
+    dp.message.register(get_clock, StepsForm.GET_TIME)         #После введении имени переходим в функцию которая
     dp.message.register(get_contact, StepsForm.GET_CONTACT)         #После введении имени переходим в функцию которая
     dp.message.register(get_persons, StepsForm.GET_PERSONS)         #После введении имени переходим в функцию которая
     dp.message.register(confirm_booking, StepsForm.CONFIRM_BOOKING)         #После введении имени переходим в функцию которая

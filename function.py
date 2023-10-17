@@ -51,7 +51,7 @@ def get_days(service_days: str =''):
         '12':'Декабрь',
     }
 
-    week_days_list = ['1','2','3','4','5','6','7']
+    week_days_list = ['1','2','3','4','5','6','0']
     if service_days :
         week_days_list = [x for x in service_days.split(',')]
 
@@ -99,7 +99,7 @@ def week_days_names(service_days: str =''):
         '4':'Чт.',
         '5':'Пт.',
         '6':'Сб.',
-        '7':'Вс.'
+        '0':'Вс.'
     }
 
     names_list = ''
@@ -114,6 +114,25 @@ def week_days_names(service_days: str =''):
     else:
         return "Ежедневно"
 
+
+def week_days_name(service_day: str =''):
+    wdays = {
+        '1':'Пн.',
+        '2':'Вт.',
+        '3':'Ср.',
+        '4':'Чт.',
+        '5':'Пт.',
+        '6':'Сб.',
+        '0':'Вс.'
+    }
+
+
+
+
+    if service_day != None and service_day != '':
+        return wdays.get(service_day)
+    else:
+        return "Ежедневно"
 
 
 
@@ -133,6 +152,14 @@ def check_date_format(date: str):
         return False
     
 
+def check_time_format(time: str):
+    if len(time) != 5:
+        return False
+    else:
+        if time[0].isdigit() and time[1].isdigit() and time[2] == ':' and time[3].isdigit() and time[4].isdigit():
+            return True
+        else:
+            return False
 
 
 def format_date(date: str):
@@ -155,7 +182,7 @@ def format_date(date: str):
 
 
 
-
+# print(week_days_names(str(datetime.datetime.weekday(format_date('18/10'))+1)))
 
 # days_list = get_days('').items()
 # calendar_list = []

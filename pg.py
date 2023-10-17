@@ -6,6 +6,8 @@ from config import DB
 import math
 import re
 
+from function import week_days_name
+
 
 
 
@@ -139,7 +141,36 @@ class BotDB:
         except Exception as ex:
             print(ex)
             return False
+        
 
+    def select_clock(self, route, wday=''):        
+        query = "SELECT * FROM start_time WHERE start_city = %s;"
+        try:
+            res = self.__request.selectd(query, (route,))
+            
+            if res[0].get('service_day') == '':
+                return res
+            else:
+                lst = []
+                for i in res:
+                    if i.get('service_day') == str(wday):
+                        lst.append(i)
+
+                if len(lst) >0:
+                    return lst
+                else:
+                    return []
+        except Exception as ex:
+            print(ex)
+            return []
+        
+    def get_start_clock(self, start_city):
+        query = "SELECT * FROM start_time WHERE start_city = %s;"
+        try:
+            res = self.__request.selectd(query, (start_city,))
+            return res
+        except Exception as ex:
+            return []
 
 connect = PgConnect(host=DB.host, port=DB.port, database=DB.database, user=DB.user, password=DB.password)
 request_db = PgRequest(connect)
@@ -147,5 +178,19 @@ request_db = PgRequest(connect)
 db_bot = BotDB(request_db)
 
 
-# for i in db_bot.get_user_orders('6458439503'):
-#     print(i)
+
+for i in db_bot.get_start_clock('1'):
+    print(i)
+
+
+start_time = db_bot.get_start_clock('1')
+
+
+schedule =''
+schedule_days = {x.get('service_day'):'' for x in start_time}
+for i in start_time:
+    schedule_days[i.get('service_day')] += i.get('service_time') +' '
+
+for key, val in schedule_days.items():
+    schedule+= f'{week_days_name(key)} {val}|'
+
