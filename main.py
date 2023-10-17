@@ -21,10 +21,10 @@ from apscheduler.triggers.interval import IntervalTrigger
 # env.read_env('.env')                           #
 # TOKEN = env.str('TOKEN')                       #
 # ADMIN = env.int('ADMIN_ID')       
-# TOKEN = '6363512631:AAFXzcTrJVhHrB-fwKcpuPWn6kA27uQvsxk'
-TOKEN = '6602942175:AAHUo9uYfUiOB6YekUBc_jjjmLfjXBsWOMc'
+TOKEN = '6363512631:AAFXzcTrJVhHrB-fwKcpuPWn6kA27uQvsxk'
+#TOKEN = '6602942175:AAHUo9uYfUiOB6YekUBc_jjjmLfjXBsWOMc'
 ADMIN = '6458439503'
-ADMINS = ['6458439503'] #'5767451685'
+ADMINS = ['5767451685','6458439503'] #'5767451685'
 ################################################
 
 
