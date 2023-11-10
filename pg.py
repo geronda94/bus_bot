@@ -179,8 +179,6 @@ db_bot = BotDB(request_db)
 
 
 
-for i in db_bot.get_start_clock('1'):
-    print(i)
 
 
 start_time = db_bot.get_start_clock('1')
@@ -191,6 +189,12 @@ schedule_days = {x.get('service_day'):'' for x in start_time}
 for i in start_time:
     schedule_days[i.get('service_day')] += i.get('service_time') +' '
 
+
+numer = 0
 for key, val in schedule_days.items():
-    schedule+= f'{week_days_name(key)} {val}|'
+    numer +=1
+    sep = ''
+    if numer == len(schedule_days):
+        sep = '| '
+    schedule+= f'{week_days_name(key)} {val}'+ sep
 

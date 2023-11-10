@@ -1,4 +1,6 @@
 import datetime
+import calendar
+
 
 
 def number_validator(number: str):
@@ -17,6 +19,22 @@ def number_validator(number: str):
         return False
 
 
+# def get_month_days(year, month):
+#     # Находим первый день месяца
+#     year = int(year)
+#     month = int(month)
+
+#     if month == datetime.datetime.now().month:
+#         first_day = datetime.datetime.now().date()
+#     else:
+#         first_day = datetime.date(year, month, 1)
+    
+#     last_day = datetime.date(year, month + 1, 1) - datetime.timedelta(days=1)
+#     days = [first_day + datetime.timedelta(days=x) for x in range((last_day - first_day).days + 1)]
+    
+#     # Возвращаем список дней
+#     return days
+
 def get_month_days(year, month):
     # Находим первый день месяца
     year = int(year)
@@ -26,13 +44,14 @@ def get_month_days(year, month):
         first_day = datetime.datetime.now().date()
     else:
         first_day = datetime.date(year, month, 1)
-
-    last_day = datetime.date(year, month + 1, 1) - datetime.timedelta(days=1)
-    days = [first_day + datetime.timedelta(days=x) for x in range((last_day - first_day).days + 1)]
+    
+    # Находим последний день месяца
+    last_day = calendar.monthrange(year, month)[1]
+    
+    days = [first_day + datetime.timedelta(days=x) for x in range(last_day)]
     
     # Возвращаем список дней
     return days
-
 
 
 def get_days(service_days: str =''):
