@@ -6,7 +6,8 @@ import asyncio
 from environs import Env
 import logging #импортируем библиотеку логирования
 from aiogram.types import BotCommand, BotCommandScopeDefault #Узнать про скопы
-from aiogram.types import Message, ContentType, Contact
+
+from aiogram.types import Message, ContentType, Contact, Chat
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton,KeyboardButtonPollType, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import  ReplyKeyboardBuilder, InlineKeyboardBuilder
 from pg import db_bot
@@ -22,9 +23,10 @@ from apscheduler.triggers.interval import IntervalTrigger
 # TOKEN = env.str('TOKEN')                       #
 # ADMIN = env.int('ADMIN_ID')       
 TOKEN = '6363512631:AAFXzcTrJVhHrB-fwKcpuPWn6kA27uQvsxk'
+
 #TOKEN = '6602942175:AAHUo9uYfUiOB6YekUBc_jjjmLfjXBsWOMc'
 ADMIN = '6458439503'
-ADMINS = ['5767451685','6458439503'] #'5767451685'
+ADMINS = ['6458439503', '5767451685'] #'5767451685'
 ################################################
 
 
@@ -37,8 +39,7 @@ async def set_commands(bot: Bot):
         BotCommand(command='catalog', description='Каталог'),
         BotCommand(command='history', description='История'),
     ]
-
-    await bot.set_my_commands(commands, BotCommandScopeDefault()) #Скоп по умолчанию|ПОказывает команды всем
+    await bot.set_my_commands(commands, BotCommandScopeDefault) #Скоп по умолчанию|ПОказывает команды всем
 
 
 #Формруем кнопки календаря
@@ -64,7 +65,7 @@ async def booking_button(state: FSMContext):
 
     keyboard_builder.button(text='Забронировать билет') #далее создаем кнопки
 
-
+    
     await state.set_state(StepsForm.GET_DIRECTION)
     return keyboard_builder.as_markup(resize_keyboard=True, #Указываем настройки клавиатуры
                                one_time_leyboard=True,
@@ -74,116 +75,120 @@ async def booking_button(state: FSMContext):
 
 
 async def get_booking(message: Message, state: FSMContext):
-    await state.clear()
-    services = db_bot.select_services()
+    if message.chat.type == 'private': 
+        await state.clear()
+        services = db_bot.select_services()
 
-    keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок 
-    for i in services:
-        keyboard_builder.button(text=f'{i.get("service_name")}') #далее создаем кнопки
+        keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок 
+        for i in services:
+            keyboard_builder.button(text=f'{i.get("service_name")}') #далее создаем кнопки
 
-    keyboard_builder.adjust(1,)
-    await message.answer('Укажите направление',reply_markup=keyboard_builder.as_markup(
-                                #resize_keyboard=True, #Указываем настройки клавиатуры
-                               one_time_leyboard=True,
-                               input_field_placeholder=''                               
-                               ))
-    
+        keyboard_builder.adjust(1,)
+        await message.answer('Укажите направление',reply_markup=keyboard_builder.as_markup(
+                                    #resize_keyboard=True, #Указываем настройки клавиатуры
+                                one_time_leyboard=True,
+                                input_field_placeholder=''                               
+                                ))
+        
 
-    await state.set_state(StepsForm.GET_DATE)
+        await state.set_state(StepsForm.GET_DATE)
 
-
+    else:
+        message.answer('Перейдите в лс бота для бронирования \n https://t.me/OsessaBussTour_bot')
 
 
 
 async def get_date(message: Message, state: FSMContext):
-    services = db_bot.select_services()
-    services_list = [x.get('service_name') for x in services]
-    context_data = await state.get_data()
-    state_direction = context_data.get('direction')
+    if message.chat.type == 'private': 
+        services = db_bot.select_services()
+        services_list = [x.get('service_name') for x in services]
+        context_data = await state.get_data()
+        state_direction = context_data.get('direction')
 
 
-    if message.text in services_list:
+        if message.text in services_list:
+            
+            calendar_list = []
+            service_days = ''
+
+            for service in services:
+                if str(message.text) == (service.get('service_name')):
+                    service_days = service.get('week_days')
+                    start_city = service.get('start_city')
+                    service_price = service.get('service_price')
+
+
+            days_list = get_days(service_days).items()
+            for month_name, date_list in days_list:
+                calendar_list.append([KeyboardButton(text=f'{month_name}')])            
         
-        calendar_list = []
-        service_days = ''
+                date_list_buttons = []
+                count_days = 0
+                last_count = len(date_list) %5
 
-        for service in services:
-            if str(message.text) == (service.get('service_name')):
-                service_days = service.get('week_days')
-                start_city = service.get('start_city')
-                service_price = service.get('service_price')
+                for i in range(len(date_list)):
+                    day = date_list[i]
 
+                    date_list_buttons.append(KeyboardButton(text=f'{day}'))
+                    count_days +=1           
+                    
 
-        days_list = get_days(service_days).items()
-        for month_name, date_list in days_list:
-            calendar_list.append([KeyboardButton(text=f'{month_name}')])            
-    
-            date_list_buttons = []
-            count_days = 0
-            last_count = len(date_list) %5
-
-            for i in range(len(date_list)):
-                day = date_list[i]
-
-                date_list_buttons.append(KeyboardButton(text=f'{day}'))
-                count_days +=1           
-                
-
-                
-                if count_days == 5:
-                    calendar_list.append(date_list_buttons)
-                    count_days = 0
-                    date_list_buttons = []
-                if (len(date_list) - i < 5) and (last_count == count_days):
-                        for i in range(5- len(date_list_buttons)):
-                            date_list_buttons.append(KeyboardButton(text=f'  '))
+                    
+                    if count_days == 5:
                         calendar_list.append(date_list_buttons)
                         count_days = 0
                         date_list_buttons = []
+                    if (len(date_list) - i < 5) and (last_count == count_days):
+                            for i in range(5- len(date_list_buttons)):
+                                date_list_buttons.append(KeyboardButton(text=f'  '))
+                            calendar_list.append(date_list_buttons)
+                            count_days = 0
+                            date_list_buttons = []
 
-                            
+                                
 
-    
-        #await message.answer(f'Рейс: <b>{message.text}</b>', reply_markup=ReplyKeyboardRemove())
-        await message.answer(f'Рейс: <b>{message.text}</b> \nОтправление: <b>{week_days_names(service_days=service_days)}</b>\nЦена билета: <b>{service_price} грн. </b>')
         
+            #await message.answer(f'Рейс: <b>{message.text}</b>', reply_markup=ReplyKeyboardRemove())
+            await message.answer(f'Рейс: <b>{message.text}</b> \nОтправление: <b>{week_days_names(service_days=service_days)}</b>\nЦена билета: <b>{service_price} грн. </b>')
+            
 
 
-        await message.answer("Выберите дату отправления", reply_markup=ReplyKeyboardMarkup(keyboard=calendar_list,
-                                                                        resize_keyboard=True, #Делает кнопки меньше
-                                                                        one_time_keyboard=True, #Скрывает клавиатуру после нажатия
-                                                                        input_field_placeholder='Нельзя вводить текст, выберите кнопку', #Подсказка в виде надписи в поле ввода
-                                                                        selective=True #Показывает клавиатуру только тому кто ее вызвал(актуально в группах)
-                                                                        ))
+            await message.answer("Выберите дату отправления", reply_markup=ReplyKeyboardMarkup(keyboard=calendar_list,
+                                                                            resize_keyboard=True, #Делает кнопки меньше
+                                                                            one_time_keyboard=True, #Скрывает клавиатуру после нажатия
+                                                                            input_field_placeholder='Нельзя вводить текст, выберите кнопку', #Подсказка в виде надписи в поле ввода
+                                                                            selective=True #Показывает клавиатуру только тому кто ее вызвал(актуально в группах)
+                                                                            ))
 
-        await state.update_data(direction=message.text)  
-        await state.update_data(start_city=str(start_city))  
-        await state.set_state(StepsForm.GET_TIME)
-    
-    elif state_direction:
-        await message.answer(f'Рейс: <b>{state_direction}</b>', reply_markup=ReplyKeyboardMarkup(keyboard=calendar_list,
-                                                                        resize_keyboard=True, #Делает кнопки меньше
-                                                                        one_time_keyboard=True, #Скрывает клавиатуру после нажатия
-                                                                        input_field_placeholder='Нельзя вводить текст, выберите кнопку', #Подсказка в виде надписи в поле ввода
-                                                                        selective=True #Показывает клавиатуру только тому кто ее вызвал(актуально в группах)
-                                                                        ))
+            await state.update_data(direction=message.text)  
+            await state.update_data(start_city=str(start_city))  
+            await state.set_state(StepsForm.GET_TIME)
+        
+        elif state_direction:
+            await message.answer(f'Рейс: <b>{state_direction}</b>', reply_markup=ReplyKeyboardMarkup(keyboard=calendar_list,
+                                                                            resize_keyboard=True, #Делает кнопки меньше
+                                                                            one_time_keyboard=True, #Скрывает клавиатуру после нажатия
+                                                                            input_field_placeholder='Нельзя вводить текст, выберите кнопку', #Подсказка в виде надписи в поле ввода
+                                                                            selective=True #Показывает клавиатуру только тому кто ее вызвал(актуально в группах)
+                                                                            ))
 
-        await state.set_state(StepsForm.GET_TIME)
-    else:
-        keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
-        keyboard_builder.button(text='Вернуться к выбору направления') #далее создаем кнопки
+            await state.set_state(StepsForm.GET_TIME)
+        else:
+            keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
+            keyboard_builder.button(text='Вернуться к выбору направления') #далее создаем кнопки
 
 
-        await message.answer(f'Неверное направление, повторите ввод', 
-                                reply_markup=keyboard_builder.as_markup( #Указываем настройки клавиатуры
-                                                                        one_time_leyboard=True,
-                                                                        input_field_placeholder=''))
-        await state.set_state(StepsForm.GET_DIRECTION)
+            await message.answer(f'Неверное направление, повторите ввод', 
+                                    reply_markup=keyboard_builder.as_markup( #Указываем настройки клавиатуры
+                                                                            one_time_leyboard=True,
+                                                                            input_field_placeholder=''))
+            await state.set_state(StepsForm.GET_DIRECTION)
 
 
 
 
 async def get_clock(message: Message, bot: Bot, state: FSMContext):
+    
     context_data = await state.get_data()
     start_city = str(context_data.get('start_city'))
     state_date = context_data.get('date')
@@ -404,60 +409,65 @@ async def parse_orders(bot: Bot):
 
 
 async def get_catalog(message: Message):
-    services = db_bot.select_services()
-    service_items = ''
+    if message.chat.type == 'private': 
+        services = db_bot.select_services()
+        service_items = ''
 
-    for i in services:
-        service_id = i.get('id') 
-        name = i.get('service_name')
-        price = i.get("service_price")
-        # week_days = week_days_names(i.get('week_days'))
-        start_city = i.get('start_city')
-        start_time = db_bot.get_start_clock(start_city=start_city)
+        for i in services:
+            service_id = i.get('id') 
+            name = i.get('service_name')
+            price = i.get("service_price")
+            # week_days = week_days_names(i.get('week_days'))
+            start_city = i.get('start_city')
+            start_time = db_bot.get_start_clock(start_city=start_city)
 
-        schedule =''
-        schedule_days = {x.get('service_day'):'' for x in start_time}
-        for i in start_time:
-            schedule_days[i.get('service_day')] += i.get('service_time') +' '
+            schedule =''
+            schedule_days = {x.get('service_day'):'' for x in start_time}
+            for i in start_time:
+                schedule_days[i.get('service_day')] += i.get('service_time') +' '
 
-        for key, val in schedule_days.items():
-            schedule+= f'{week_days_name(key)} {val}|'
+            for key, val in schedule_days.items():
+                schedule+= f'{week_days_name(key)} {val}|'
 
-        
-        service_item = f'<b>{name}</b>\nЦена билета: <b>{price}</b> грн.\nОтправление: \n<b>{schedule}</b> \n\n'
-        service_items += service_item
-        
-    keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
-    keyboard_builder.button(text='Забронировать билет') #далее создаем кнопки
+            
+            service_item = f'<b>{name}</b>\nЦена билета: <b>{price}</b> грн.\nОтправление: \n<b>{schedule}</b> \n\n'
+            service_items += service_item
+            
+        keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
+        keyboard_builder.button(text='Забронировать билет') #далее создаем кнопки
 
-    await message.answer(service_items, reply_markup=keyboard_builder.as_markup(resize_keyboard=True,#Указываем настройки клавиатуры
-                                                                                    one_time_leyboard=True,
-                                                                                    input_field_placeholder=''                                                                            
-                                                                                    ))
+        await message.answer(service_items, reply_markup=keyboard_builder.as_markup(resize_keyboard=True,#Указываем настройки клавиатуры
+                                                                                        one_time_leyboard=True,
+                                                                                       input_field_placeholder=''                                                                            
+                                                                                        ))
+    else:
+        message.answer('Перейдите в лс бота для бронирования \n https://t.me/OsessaBussTour_bot')
 
 async def get_orders_history(message: Message):
-    user_id = str(message.from_user.id)
-    history = db_bot.get_user_orders(user_id=user_id)
-    orders = ''
-    if history:
-        for i in history:
-            order_id = i.get('id')
-            name = i.get('name')
-            phone = i.get('phone')
-            passagers = i.get('passagers')
-            order_datetime = i.get('order_datetime').strftime('%d-%m-%Y')
-            route_datetime = i.get('route_datetime').strftime('%d-%m-%Y')
-            route_direction = i.get('route_direction')
-            route_id = i.get('route_id')
-            order_status = i.get('order_status')
+    if message.chat.type == 'private': 
+        user_id = str(message.from_user.id)
+        history = db_bot.get_user_orders(user_id=user_id)
+        orders = ''
+        if history:
+            for i in history:
+                order_id = i.get('id')
+                name = i.get('name')
+                phone = i.get('phone')
+                passagers = i.get('passagers')
+                order_datetime = i.get('order_datetime').strftime('%d-%m-%Y')
+                route_datetime = i.get('route_datetime').strftime('%d-%m-%Y')
+                route_direction = i.get('route_direction')
+                route_id = i.get('route_id')
+                order_status = i.get('order_status')
 
-            order = f'Бронь от <b>{order_datetime}</b>\n{route_direction}\nДата отправления: <b>{route_datetime}</b>\nБилетов забронированно: <b>{passagers}</b>\n\n\n'
-            
-            await message.answer(order)
+                order = f'Бронь от <b>{order_datetime}</b>\n{route_direction}\nДата отправления: <b>{route_datetime}</b>\nБилетов забронированно: <b>{passagers}</b>\n\n\n'
+                
+                await message.answer(order)
+        else:
+            await message.answer('У Вас пока нету заявок')
+
     else:
-        await message.answer('У Вас пока нету заявок')
-
-
+        message.answer('Перейдите в лс бота для бронирования \n https://t.me/OsessaBussTour_bot')
 
 async def post_post(message: Message):
     # await bot.send_message(ADMIN, 'Hello')
@@ -466,7 +476,7 @@ async def post_post(message: Message):
             ]
         ])
     if str(message.from_user.id) in ADMINS:
-        await message.answer(text='Теперь доступна онлайн бронь билетов через телеграм бот', reply_markup=keyboard)
+        await message.answer(text='Доступна бронь билетов через телеграм', reply_markup=keyboard)
 
 
 
@@ -486,14 +496,18 @@ async def stop_bot(bot: Bot):
         await bot.send_message(admin, text='<s>Бот остановлен</s>')
 
 async def get_start(message: Message): #Функция срабатывает когда юзер дает команду /start
-    keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
-    keyboard_builder.button(text='Посмотреть каталог') #далее создаем кнопки
-    keyboard_builder.button(text='Забронировать билет') #далее создаем кнопки
-    await message.answer('Давай начнем!',reply_markup=keyboard_builder.as_markup(resize_keyboard=True, #Указываем настройки клавиатуры
-                               one_time_leyboard=True,
-                               input_field_placeholder=''
-                               
-                               )) #Отправляет текстовые кнопки прописанные выше
+    if message.chat.type == 'private': 
+        keyboard_builder = ReplyKeyboardBuilder()#Создаем объект билдера кнопок
+        keyboard_builder.button(text='Посмотреть каталог') #далее создаем кнопки
+        keyboard_builder.button(text='Забронировать билет') #далее создаем кнопки
+        await message.answer('Давай начнем!',reply_markup=keyboard_builder.as_markup(resize_keyboard=True, #Указываем настройки клавиатуры
+                                one_time_leyboard=True,
+                                input_field_placeholder=''
+                                
+                                )) #Отправляет текстовые кнопки прописанные выше
+
+    else:
+        message.answer('Перейдите в лс бота для бронирования \n https://t.me/OsessaBussTour_bot')
 
 
 
@@ -511,6 +525,7 @@ async def start():
 
     scheduler = AsyncIOScheduler()
     scheduler.add_job(parse_orders, 'interval', seconds=5, args=(bot,))
+    scheduler.add_job(post_post, 'interval', seconds=60*60*12, args=(Message,))
 
 
     dp.message.register(get_start, Command(commands=['start'])) #Регистрируем хэндлер на команду /startdp.message.register(get_start, Command(commands=['start'])) #Регистрируем хэндлер на команду /start#Регистрируем хэндлер на команду /startdp.message.register(get_start, Command(commands=['start'])) #Регистрируем хэндлер на команду /start
