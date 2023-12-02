@@ -5,7 +5,7 @@ from aiogram.filters import Filter, Command
 import asyncio
 from environs import Env
 import logging #импортируем библиотеку логирования
-from aiogram.types import BotCommand, BotCommandScopeDefault, BotCommandScopeAllPrivateChats,BotCommandScopeAllGroupChats  #Узнать про скопы
+from aiogram.types import BotCommand, BotCommandScopeDefault,BotCommandScopeAllGroupChats  #Узнать про скопы
 
 from aiogram.types import Message, ContentType, Contact, Chat
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton,KeyboardButtonPollType, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
@@ -41,7 +41,7 @@ async def set_commands(bot: Bot):
     ]
 
     await bot.set_my_commands(commands) #Скоп по умолчанию|ПОказывает команды всем
-    await bot.set_my_commands(commands=[], BotCommandScopeAllGroupChats() )
+    await bot.set_my_commands([], BotCommandScopeAllGroupChats())
 
 
 #Формруем кнопки календаря
