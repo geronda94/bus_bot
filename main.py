@@ -39,7 +39,7 @@ async def set_commands(bot: Bot):
         BotCommand(command='catalog', description='Каталог'),
         BotCommand(command='history', description='История'),
     ]
-    await bot.set_my_commands(commands, BotCommandScopeDefault) #Скоп по умолчанию|ПОказывает команды всем
+    await bot.set_my_commands(commands, BotCommandScopeDefault()) #Скоп по умолчанию|ПОказывает команды всем
 
 
 #Формруем кнопки календаря
