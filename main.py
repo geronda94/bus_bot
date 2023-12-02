@@ -41,7 +41,7 @@ async def set_commands(bot: Bot):
     ]
 
     await bot.set_my_commands(commands) #Скоп по умолчанию|ПОказывает команды всем
-    await bot.set_my_commands([], BotCommandScopeAllGroupChats())
+    await bot.set_my_commands([BotCommand(command='', description='')], BotCommandScopeAllGroupChats())
 
 
 #Формруем кнопки календаря
