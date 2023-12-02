@@ -5,7 +5,7 @@ from aiogram.filters import Filter, Command
 import asyncio
 from environs import Env
 import logging #импортируем библиотеку логирования
-from aiogram.types import BotCommand, BotCommandScopeDefault #Узнать про скопы
+from aiogram.types import BotCommand, BotCommandScopeDefault, BotCommandScopeAllPrivateChats,BotCommandScopeAllGroupChats  #Узнать про скопы
 
 from aiogram.types import Message, ContentType, Contact, Chat
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton,KeyboardButtonPollType, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
@@ -26,7 +26,7 @@ TOKEN = '6363512631:AAFXzcTrJVhHrB-fwKcpuPWn6kA27uQvsxk'
 
 #TOKEN = '6602942175:AAHUo9uYfUiOB6YekUBc_jjjmLfjXBsWOMc'
 ADMIN = '6458439503'
-ADMINS = ['6458439503', '5767451685'] #'5767451685'
+ADMINS = ['6458439503','5767451685'] #'5767451685'
 ################################################
 
 
@@ -39,7 +39,9 @@ async def set_commands(bot: Bot):
         BotCommand(command='catalog', description='Каталог'),
         BotCommand(command='history', description='История'),
     ]
-    await bot.set_my_commands(commands, BotCommandScopeDefault()) #Скоп по умолчанию|ПОказывает команды всем
+
+    await bot.set_my_commands(commands) #Скоп по умолчанию|ПОказывает команды всем
+    await bot.set_my_commands(commands=[], BotCommandScopeAllGroupChats() )
 
 
 #Формруем кнопки календаря
@@ -507,7 +509,7 @@ async def get_start(message: Message): #Функция срабатывает к
                                 )) #Отправляет текстовые кнопки прописанные выше
 
     else:
-        message.answer('Перейдите в лс бота для бронирования \n https://t.me/OsessaBussTour_bot')
+        message.answer('Перейдите в лс бота для бронирования \n https://t.me/OsessaBussTour_bot',reply_markup=ReplyKeyboardRemove())
 
 
 
