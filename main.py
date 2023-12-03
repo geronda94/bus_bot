@@ -527,7 +527,7 @@ async def start():
 
     scheduler = AsyncIOScheduler()
     scheduler.add_job(parse_orders, 'interval', seconds=5, args=(bot,))
-    scheduler.add_job(post_post, 'interval', seconds=60*60*12, args=(Message,))
+    scheduler.add_job(post_post, 'interval', hours=12, args=(Message,))
 
 
     dp.message.register(get_start, Command(commands=['start'])) #Регистрируем хэндлер на команду /startdp.message.register(get_start, Command(commands=['start'])) #Регистрируем хэндлер на команду /start#Регистрируем хэндлер на команду /startdp.message.register(get_start, Command(commands=['start'])) #Регистрируем хэндлер на команду /start
